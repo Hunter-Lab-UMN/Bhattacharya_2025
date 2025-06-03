@@ -1,0 +1,182 @@
+conda activate qiime2-2022.2                                             
+
+cd /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/CF_crypts
+
+mkdir CF_crypts
+cd CF_crypts
+
+qiime metadata tabulate \
+  --m-input-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --o-visualization tabulated-sample-metadata.qzv
+  
+  qiime tools import \
+  --type 'SampleData[PairedEndSequencesWithQuality]' \
+  --input-path /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_manifest.txt \
+  --output-path paired-end-demux.qza \
+  --input-format PairedEndFastqManifestPhred33V2
+  
+   qiime dada2 denoise-paired \
+  --i-demultiplexed-seqs paired-end-demux.qza \
+  --p-trunc-len-f 245  \
+  --p-trunc-len-r 215 \
+  --o-representative-sequences rep-seqs-dada2.qza \
+  --o-table table-dada2.qza \
+  --o-denoising-stats stats-dada2.qza
+  
+  qiime metadata tabulate \
+  --m-input-file stats-dada2.qza \
+  --o-visualization stats-dada2.qzv
+  
+  mv rep-seqs-dada2.qza rep-seqs.qza
+mv table-dada2.qza table.qza
+
+qiime feature-table summarize \
+  --i-table table.qza \
+  --o-visualization table.qzv \
+  --m-sample-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt
+  
+  qiime feature-table tabulate-seqs \
+  --i-data rep-seqs.qza \
+  --o-visualization rep-seqs.qzv
+  
+  qiime tools export \
+  --input-path rep-seqs.qza \
+  --output-path exported-feature-table
+
+qiime phylogeny align-to-tree-mafft-fasttree \
+  --i-sequences rep-seqs.qza \
+  --o-alignment aligned-rep-seqs.qza \
+  --o-masked-alignment masked-aligned-rep-seqs.qza \
+  --o-tree unrooted-tree.qza \
+  --o-rooted-tree rooted-tree.qza
+  
+  qiime diversity core-metrics-phylogenetic \
+  --i-phylogeny rooted-tree.qza \
+  --i-table table.qza \
+  --p-sampling-depth 800 \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --output-dir core-metrics-results
+  
+    qiime diversity beta-group-significance \
+  --i-distance-matrix core-metrics-results/unweighted_unifrac_distance_matrix.qza \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --m-metadata-column Genotype \
+  --o-visualization core-metrics-results/unweighted-unifrac-genotype-significance.qzv \
+  --p-pairwise
+  
+   qiime diversity beta-group-significance \
+  --i-distance-matrix core-metrics-results/unweighted_unifrac_distance_matrix.qza \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --m-metadata-column Sample_type \
+  --o-visualization core-metrics-results/unweighted-unifrac-sample_type-significance.qzv \
+  --p-pairwise
+  
+   qiime diversity beta-group-significance \
+  --i-distance-matrix core-metrics-results/weighted_unifrac_distance_matrix.qza \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --m-metadata-column Genotype \
+  --o-visualization core-metrics-results/weighted-unifrac-genotype-significance.qzv \
+  --p-pairwise
+  
+   qiime diversity beta-group-significance \
+  --i-distance-matrix core-metrics-results/weighted_unifrac_distance_matrix.qza \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --m-metadata-column Sample_type \
+  --o-visualization core-metrics-results/weighted-unifrac-sample_type-significance.qzv \
+  --p-pairwise
+  
+  qiime feature-classifier classify-sklearn \
+  --i-classifier /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/silva-138-99-nb-classifier.qza \
+  --i-reads rep-seqs.qza \
+  --o-classification taxonomy.qza
+  
+  qiime metadata tabulate \
+  --m-input-file taxonomy.qza \
+  --o-visualization taxonomy.qzv
+  
+  qiime taxa barplot \
+  --i-table table.qza \
+  --i-taxonomy taxonomy.qza \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --o-visualization taxa-bar-plots.qzv
+  
+  
+  #ALDex2 plugin trial
+  conda install -c dgiguere q2-aldex2
+  
+  qiime aldex2 aldex2 \
+  --i-table crypt-table.qza \
+    --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+    --m-metadata-column Genotype \
+    --output-dir crypt-test
+  
+  
+  
+  
+  #Subset out the crypt samples only for further analysis
+  qiime feature-table filter-samples \
+  --i-table table.qza \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --p-where "[Sample_type]='crypt'" \
+  --o-filtered-table crypt-table.qza
+  
+  #ANCOM does not work with zeros, so pseudocount imputes values here
+  qiime composition add-pseudocount \
+  --i-table crypt-table.qza \
+  --o-composition-table comp-crypt-table.qza
+  
+  #Run ANCOM to get differential abundance between genotypes in crypt samples
+  qiime composition ancom \
+  --i-table comp-crypt-table.qza \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --m-metadata-column Genotype \
+  --o-visualization ancom-crypt-genotype.qzv
+  
+  qiime taxa barplot \
+  --i-table crypt-table.qza \
+  --i-taxonomy taxonomy.qza \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --o-visualization crypt-bar-plots.qzv
+  
+  
+  
+  
+  #Subset out the fecal samples only for further analysis
+  qiime feature-table filter-samples \
+  --i-table table.qza \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --p-where "[Sample_type]='fecal'" \
+  --o-filtered-table fecal-table.qza
+  
+  #ANCOM does not work with zeros, so pseudocount imputes values here
+  qiime composition add-pseudocount \
+  --i-table fecal-table.qza \
+  --o-composition-table comp-fecal-table.qza
+  
+  #Run ANCOM to get differential abundance between genotypes in crypt samples
+  qiime composition ancom \
+  --i-table comp-fecal-table.qza \
+  --m-metadata-file /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/Sample_metadata.txt \
+  --m-metadata-column Genotype \
+  --o-visualization ancom-fecal-genotype.qzv
+  
+  
+  
+  #Install picrust2
+  conda create -n picrust2 -c bioconda -c conda-forge picrust2=2.1.4_b
+  
+  conda activate picrust2
+  
+  mkdir picrust2_out_pipeline
+cd picrust2_out_pipeline
+
+#Export the table.qza to biom
+qiime tools export \
+    --input-path table.qza \
+    --output-path Biom/
+    
+
+
+    
+    picrust2_pipeline.py -s /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/CF_crypts/exported-feature-table/dna-sequences.fasta -i /Users/joshfletcher/Desktop/Hunter_lab/Scott_collab/CF_crypts/Biom/feature-table.biom -o picrust2_out_pipeline -p 6
+ 
